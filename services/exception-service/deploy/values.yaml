@@ -1,0 +1,6 @@
+# exception-service: values common to all environments (chart: deploy/helm/demp-service)
+nameOverride: exception-service
+image:
+  repository: registry.example.com/demp/exception-service
+env:
+  OTLP_TRACING_ENDPOINT: http://otel-collector.monitoring:4318/v1/traces

@@ -1,0 +1,14 @@
+# integration-service @ dev
+replicaCount: 1
+env:
+  DB_URL: jdbc:postgresql://pg-dev.example.com:5432/integration_db
+  KAFKA_BOOTSTRAP_SERVERS: kafka-dev-bootstrap.kafka:9092
+  TRACING_SAMPLING_PROBABILITY: "1.0"
+  DELIVERY_BASE_URL: http://delivery-api.dev.example.com
+vault:
+  path: demp/dev/integration-service
+resources:
+  requests: { cpu: 200m, memory: 512Mi }
+  limits: { memory: 512Mi }
+podDisruptionBudget:
+  enabled: false

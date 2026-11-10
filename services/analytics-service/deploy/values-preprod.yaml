@@ -1,0 +1,17 @@
+# analytics-service @ preprod
+replicaCount: 2
+env:
+  DB_URL: jdbc:postgresql://pg-preprod.example.com:5432/analytics_db
+  KAFKA_BOOTSTRAP_SERVERS: kafka-preprod-bootstrap.kafka:9092
+  TRACING_SAMPLING_PROBABILITY: "0.1"
+vault:
+  path: demp/preprod/analytics-service
+resources:
+  requests: { cpu: 200m, memory: 768Mi }
+  limits: { memory: 768Mi }
+podDisruptionBudget:
+  enabled: true
+ingress:
+  enabled: true
+  host: demp-preprod.example.com
+  tlsSecret: demp-preprod-tls

@@ -24,7 +24,7 @@ public class CommandListener {
     private final ExceptionLifecycleService lifecycle;
     private final ObjectMapper mapper;
 
-    @KafkaListener(topics = Topics.EXCEPTION_COMMANDS, id = "exception-commands")
+    @KafkaListener(topics = Topics.EXCEPTION_COMMANDS, id = "exception-commands", groupId = "exception-service.commands")
     public void onCommand(ConsumerRecord<String, String> record) {
         EventEnvelope envelope = reader.read(record);
         idempotent.handle(CONSUMER_ID, envelope,

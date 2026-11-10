@@ -21,7 +21,7 @@ public class EventListener {
     private final JdbcClient jdbc;
     private final MeterRegistry meters;
 
-    @KafkaListener(id = "analytics-events",
+    @KafkaListener(id = "analytics-events", groupId = "analytics-service.events",
             topics = {Topics.EXCEPTION_EVENTS, Topics.RESOLUTION_EVENTS, Topics.INTEGRATION_EVENTS})
     public void onEvent(ConsumerRecord<String, String> record) {
         try {

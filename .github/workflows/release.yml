@@ -1,0 +1,56 @@
+name: Release
+
+# A release tag (v1.24.0) fixes the exact set of changes: build once -> preprod -> the SAME images -> prod.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io/${{ github.repository_owner }}/demp
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+      - name: Build and test with the release version
+        run: mvn -B -ntp verify -Drevision=${{ steps.version.outputs.version }}
+      - name: Build and push images
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          for service in exception-service resolution-service integration-service analytics-service; do
+            docker build --build-arg SERVICE=$service --build-arg VERSION=${{ steps.version.outputs.version }} \
+              --build-arg REVISION=${{ github.sha }} -t "$REGISTRY/$service:${{ steps.version.outputs.version }}" .
+            docker push "$REGISTRY/$service:${{ steps.version.outputs.version }}"
+          done
+
+  deploy-preprod:
+    if: vars.DEPLOY_ENABLED == 'true'
+    needs: build
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: preprod
+      version: ${{ needs.build.outputs.version }}
+    secrets: inherit
+
+  # waits for the approval of the team lead (environment "prod" -> required reviewers)
+  deploy-prod:
+    needs: [build, deploy-preprod]
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: prod
+      version: ${{ needs.build.outputs.version }}
+    secrets: inherit

@@ -1,0 +1,17 @@
+# resolution-service @ test
+replicaCount: 1
+env:
+  DB_URL: jdbc:postgresql://pg-test.example.com:5432/resolution_db
+  KAFKA_BOOTSTRAP_SERVERS: kafka-test-bootstrap.kafka:9092
+  TRACING_SAMPLING_PROBABILITY: "1.0"
+vault:
+  path: demp/test/resolution-service
+resources:
+  requests: { cpu: 200m, memory: 512Mi }
+  limits: { memory: 512Mi }
+podDisruptionBudget:
+  enabled: false
+ingress:
+  enabled: true
+  host: demp-test.example.com
+  tlsSecret: demp-test-tls

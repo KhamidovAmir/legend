@@ -1,0 +1,6 @@
+# analytics-service: values common to all environments (chart: deploy/helm/demp-service)
+nameOverride: analytics-service
+image:
+  repository: registry.example.com/demp/analytics-service
+env:
+  OTLP_TRACING_ENDPOINT: http://otel-collector.monitoring:4318/v1/traces

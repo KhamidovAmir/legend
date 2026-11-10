@@ -1,0 +1,6 @@
+# resolution-service: values common to all environments (chart: deploy/helm/demp-service)
+nameOverride: resolution-service
+image:
+  repository: registry.example.com/demp/resolution-service
+env:
+  OTLP_TRACING_ENDPOINT: http://otel-collector.monitoring:4318/v1/traces

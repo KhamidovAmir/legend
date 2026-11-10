@@ -1,0 +1,18 @@
+# integration-service @ prod
+replicaCount: 3
+env:
+  DB_URL: jdbc:postgresql://pg-prod.example.com:5432/integration_db
+  KAFKA_BOOTSTRAP_SERVERS: kafka-prod-bootstrap.kafka:9092
+  TRACING_SAMPLING_PROBABILITY: "0.05"
+  DELIVERY_BASE_URL: http://delivery-api.prod.example.com
+vault:
+  path: demp/prod/integration-service
+resources:
+  requests: { cpu: 200m, memory: 1Gi }
+  limits: { memory: 1Gi }
+podDisruptionBudget:
+  enabled: true
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 8

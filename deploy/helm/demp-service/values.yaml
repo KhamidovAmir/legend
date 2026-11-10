@@ -1,0 +1,70 @@
+# Defaults shared by all services. Overridden by services/<name>/deploy/values.yaml and values-<env>.yaml.
+nameOverride: ""
+
+image:
+  repository: registry.example.com/demp/service
+  tag: latest
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+replicaCount: 2
+
+containerPort: 8080
+
+# Plain (non-secret) configuration -> ConfigMap -> environment variables
+env: {}
+
+# Secrets come from Vault through External Secrets Operator: Vault path -> Kubernetes Secret -> env.
+# Nothing secret is ever stored in the repository or in values files.
+vault:
+  enabled: true
+  secretStore: vault-backend          # ClusterSecretStore managed by the platform team
+  path: ""                            # e.g. demp/dev/exception-service
+  refreshInterval: 1m
+  # env var name -> property inside the Vault secret
+  keys:
+    DB_USERNAME: db_username
+    DB_PASSWORD: db_password
+
+resources:
+  requests: { cpu: 200m, memory: 512Mi }
+  limits: { memory: 768Mi }           # no CPU limit on purpose: throttling hurts JVM latency more than it protects
+
+probes:
+  # startup probe gives Liquibase migrations time; liveness never depends on DB/Kafka (no restart storms)
+  startup: { path: /actuator/health/liveness, failureThreshold: 60, periodSeconds: 5 }
+  liveness: { path: /actuator/health/liveness, periodSeconds: 10 }
+  readiness: { path: /actuator/health/readiness, periodSeconds: 5 }
+
+# must be > spring.lifecycle.timeout-per-shutdown-phase (25s) + preStop sleep
+terminationGracePeriodSeconds: 45
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+serviceMonitor:
+  enabled: true
+  interval: 15s
+  path: /actuator/prometheus
+
+ingress:
+  enabled: false
+  className: nginx
+  host: ""
+  tlsSecret: ""
+
+networkPolicy:
+  enabled: true
+  # namespaces allowed to call the REST API (operator UI / gateway) and to scrape metrics
+  allowFromNamespaces: [ingress-nginx, monitoring]
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []

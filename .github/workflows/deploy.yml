@@ -1,0 +1,39 @@
+name: Deploy
+
+# Reusable: "helm upgrade" of all four services to one environment. Also runnable by hand (rollback / redeploy).
+on:
+  workflow_call:
+    inputs:
+      environment: { type: string, required: true }
+      version: { type: string, required: true }
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        options: [dev, test, preprod, prod]
+        required: true
+      version:
+        description: image tag (commit sha or release version)
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Protection rules of the GitHub environment implement the approvals: none for dev,
+    # "required reviewers" for test (QA/developer) and prod (team lead).
+    environment: ${{ inputs.environment }}
+    concurrency: deploy-${{ inputs.environment }}     # never two rollouts to one stand at once
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: Kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG_B64 }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+      - name: Platform resources (topics, alerts)
+        run: kubectl apply -n "demp-${{ inputs.environment }}" -f deploy/platform/kafka-topics.yaml -f deploy/platform/prometheus-rule.yaml
+      - name: Helm upgrade
+        run: scripts/deploy.sh "${{ inputs.environment }}" "${{ inputs.version }}" "ghcr.io/${{ github.repository_owner }}/demp"
+      - name: Debezium connector (after resolution-service migrated its schema)
+        run: kubectl apply -n "demp-${{ inputs.environment }}" -f deploy/platform/debezium-connector.yaml

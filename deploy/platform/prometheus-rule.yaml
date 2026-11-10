@@ -1,0 +1,144 @@
+# GENERATED from deploy/observability/alerts.yml (scripts/render-rules.py). Do not edit by hand.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: demp-alerts
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+  - name: demp-availability
+    rules:
+    - alert: ServiceDown
+      expr: up{job="demp-services"} == 0
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: '{{ $labels.instance }} is not scraped for 2 minutes'
+        runbook: docs/runbooks/service-down.md
+    - alert: HighHttp5xxRate
+      expr: "sum by (application) (rate(http_server_requests_seconds_count{status=~\"5..\"}[5m]))\n  / sum by (application) (rate(http_server_requests_seconds_count[5m])) > 0.05\n"
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: '{{ $labels.application }}: more than 5% of HTTP requests fail'
+        runbook: docs/runbooks/service-down.md
+  - name: demp-event-flow
+    rules:
+    - alert: OutboxBacklogGrowing
+      expr: outbox_pending_messages > 1000
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: '{{ $labels.application }}: {{ $value }} outbox rows are not published'
+        runbook: docs/runbooks/event-flow-slow.md
+    - alert: ReplicationSlotLagHigh
+      expr: pg_replication_slots_pg_wal_lsn_diff{slot_name="resolution_outbox"} > 512 * 1024 * 1024
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: 'Debezium slot resolution_outbox is {{ $value | humanize1024 }}B behind: outbox events are not delivered'
+        runbook: docs/runbooks/debezium-connector.md
+    - alert: ReplicationSlotInactive
+      expr: pg_replication_slots_active{slot_name="resolution_outbox"} == 0
+      for: 3m
+      labels:
+        severity: critical
+      annotations:
+        summary: Nobody reads the replication slot resolution_outbox (connector stopped?). WAL is accumulating
+        runbook: docs/runbooks/debezium-connector.md
+    - alert: ConsumerLagHigh
+      expr: sum by (consumergroup, topic) (kafka_consumergroup_lag{consumergroup=~".*-service\\..*"}) > 5000
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: Consumer group {{ $labels.consumergroup }} lags {{ $value }} messages on {{ $labels.topic }}
+        runbook: docs/runbooks/event-flow-slow.md
+    - alert: EventDeliveryLatencyHigh
+      expr: 'histogram_quantile(0.95, sum by (le, consumer) (rate(event_delivery_latency_seconds_bucket[5m]))) > 60
+
+        '
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: p95 delivery latency of {{ $labels.consumer }} is {{ $value | humanizeDuration }}
+        runbook: docs/runbooks/event-flow-slow.md
+    - alert: DeadLettersAppeared
+      expr: increase(kafka_dead_letter_total[10m]) > 0
+      labels:
+        severity: warning
+      annotations:
+        summary: '{{ $labels.application }} moved messages of {{ $labels.topic }} to the dead letter topic'
+        runbook: docs/runbooks/dead-letters.md
+    - alert: InboxDuplicateRateHigh
+      expr: "sum by (consumer) (rate(inbox_messages_total{result=\"duplicate\"}[10m]))\n  / sum by (consumer) (rate(inbox_messages_total[10m])) > 0.2\n"
+      for: 15m
+      labels:
+        severity: info
+      annotations:
+        summary: '{{ $labels.consumer }}: more than 20% of messages are duplicates (harmless, but something re-publishes)'
+        runbook: docs/runbooks/event-flow-slow.md
+  - name: demp-reconciliation
+    rules:
+    - alert: UnknownResultTooOld
+      expr: reconciliation_oldest_unknown_age_seconds > 1800
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: '{{ $labels.system }}: the oldest UNKNOWN result is {{ $value | humanizeDuration }} old'
+        runbook: docs/runbooks/unknown-results.md
+    - alert: FalseNotAppliedDetected
+      expr: increase(reconciliation_false_not_applied_total[15m]) > 0
+      labels:
+        severity: critical
+      annotations:
+        summary: '{{ $labels.system }}: a command declared NOT_APPLIED turned out to be applied - possible double execution'
+        runbook: docs/runbooks/unknown-results.md
+    - alert: UnknownRateHigh
+      expr: "sum by (system) (rate(integration_external_requests_total{kind=\"COMMAND\",outcome=\"UNKNOWN\"}[10m]))\n  / sum by (system) (rate(integration_external_requests_total{kind=\"COMMAND\"}[10m]))\
+        \ > 0.05\n"
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: '{{ $labels.system }}: more than 5% of commands end with an unknown result'
+        runbook: docs/runbooks/unknown-results.md
+    - alert: QueryShareOfExternalTrafficHigh
+      expr: "sum by (system) (rate(integration_external_requests_total{kind=\"QUERY\"}[10m]))\n  / sum by (system) (rate(integration_external_requests_total[10m])) > 0.7\n"
+      for: 15m
+      labels:
+        severity: info
+      annotations:
+        summary: '{{ $labels.system }}: {{ $value | humanizePercentage }} of requests are state queries'
+        runbook: docs/runbooks/unknown-results.md
+    - alert: ExternalSystemCircuitOpen
+      expr: resilience4j_circuitbreaker_state{state="open"} == 1
+      for: 2m
+      labels:
+        severity: warning
+      annotations:
+        summary: 'Circuit breaker for {{ $labels.name }} is open: the external system is degraded'
+        runbook: docs/runbooks/unknown-results.md
+  - name: demp-business
+    rules:
+    - alert: SlaBreachesSpike
+      expr: increase(resolution_sla_breaches_total[30m]) > 20
+      labels:
+        severity: warning
+      annotations:
+        summary: '{{ $value }} SLA breaches in 30 minutes'
+        runbook: docs/runbooks/unknown-results.md
+    - alert: ManualWorkSpike
+      expr: sum(increase(resolution_work_items_created_total[30m])) > 100
+      labels:
+        severity: info
+      annotations:
+        summary: '{{ $value }} manual work items created in 30 minutes: automation is not coping'
+        runbook: docs/runbooks/unknown-results.md

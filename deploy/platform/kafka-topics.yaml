@@ -1,0 +1,275 @@
+# Kafka topics as code (Strimzi KafkaTopic). Applied by the platform pipeline; auto-creation is disabled on the brokers.
+# Partitions: ordering is per key (exceptionId), so the partition count only limits consumer parallelism.
+# Changing the partition count of a keyed topic breaks per-key ordering for in-flight data - plan it as a migration.
+---
+# owner: delivery-team; consumers: exception-service
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: external.delivery.events
+  labels:
+    strimzi.io/cluster: demp-kafka
+spec:
+  topicName: external.delivery.events
+  partitions: 12
+  replicas: 3
+  config:
+    min.insync.replicas: 2          # with acks=all: a write survives the loss of one broker
+    retention.ms: 604800000
+    cleanup.policy: delete
+---
+# dead letters of external.delivery.events (kept longer: they are analysed by people)
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: external.delivery.events.dlt
+  labels:
+    strimzi.io/cluster: demp-kafka
+spec:
+  topicName: external.delivery.events.dlt
+  partitions: 3
+  replicas: 3
+  config:
+    min.insync.replicas: 2          # with acks=all: a write survives the loss of one broker
+    retention.ms: 2419200000
+    cleanup.policy: delete
+---
+# owner: delivery-team; consumers: integration-service
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: external.delivery.results
+  labels:
+    strimzi.io/cluster: demp-kafka
+spec:
+  topicName: external.delivery.results
+  partitions: 12
+  replicas: 3
+  config:
+    min.insync.replicas: 2          # with acks=all: a write survives the loss of one broker
+    retention.ms: 604800000
+    cleanup.policy: delete
+---
+# dead letters of external.delivery.results (kept longer: they are analysed by people)
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: external.delivery.results.dlt
+  labels:
+    strimzi.io/cluster: demp-kafka
+spec:
+  topicName: external.delivery.results.dlt
+  partitions: 3
+  replicas: 3
+  config:
+    min.insync.replicas: 2          # with acks=all: a write survives the loss of one broker
+    retention.ms: 2419200000
+    cleanup.policy: delete
+---
+# owner: exception-service; consumers: resolution-service, analytics-service
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: exception.events
+  labels:
+    strimzi.io/cluster: demp-kafka
+spec:
+  topicName: exception.events
+  partitions: 12
+  replicas: 3
+  config:
+    min.insync.replicas: 2          # with acks=all: a write survives the loss of one broker
+    retention.ms: 604800000
+    cleanup.policy: delete
+---
+# dead letters of exception.events (kept longer: they are analysed by people)
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: exception.events.dlt
+  labels:
+    strimzi.io/cluster: demp-kafka
+spec:
+  topicName: exception.events.dlt
+  partitions: 3
+  replicas: 3
+  config:
+    min.insync.replicas: 2          # with acks=all: a write survives the loss of one broker
+    retention.ms: 2419200000
+    cleanup.policy: delete
+---
+# owner: exception-service (consumer owns the contract); consumers: resolution-service produces
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: exception.commands
+  labels:
+    strimzi.io/cluster: demp-kafka
+spec:
+  topicName: exception.commands
+  partitions: 12
+  replicas: 3
+  config:
+    min.insync.replicas: 2          # with acks=all: a write survives the loss of one broker
+    retention.ms: 604800000
+    cleanup.policy: delete
+---
+# dead letters of exception.commands (kept longer: they are analysed by people)
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: exception.commands.dlt
+  labels:
+    strimzi.io/cluster: demp-kafka
+spec:
+  topicName: exception.commands.dlt
+  partitions: 3
+  replicas: 3
+  config:
+    min.insync.replicas: 2          # with acks=all: a write survives the loss of one broker
+    retention.ms: 2419200000
+    cleanup.policy: delete
+---
+# owner: resolution-service; consumers: analytics-service
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: resolution.events
+  labels:
+    strimzi.io/cluster: demp-kafka
+spec:
+  topicName: resolution.events
+  partitions: 12
+  replicas: 3
+  config:
+    min.insync.replicas: 2          # with acks=all: a write survives the loss of one broker
+    retention.ms: 604800000
+    cleanup.policy: delete
+---
+# dead letters of resolution.events (kept longer: they are analysed by people)
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: resolution.events.dlt
+  labels:
+    strimzi.io/cluster: demp-kafka
+spec:
+  topicName: resolution.events.dlt
+  partitions: 3
+  replicas: 3
+  config:
+    min.insync.replicas: 2          # with acks=all: a write survives the loss of one broker
+    retention.ms: 2419200000
+    cleanup.policy: delete
+---
+# owner: integration-service (consumer owns the contract); consumers: resolution-service produces
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: integration.commands
+  labels:
+    strimzi.io/cluster: demp-kafka
+spec:
+  topicName: integration.commands
+  partitions: 12
+  replicas: 3
+  config:
+    min.insync.replicas: 2          # with acks=all: a write survives the loss of one broker
+    retention.ms: 604800000
+    cleanup.policy: delete
+---
+# dead letters of integration.commands (kept longer: they are analysed by people)
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: integration.commands.dlt
+  labels:
+    strimzi.io/cluster: demp-kafka
+spec:
+  topicName: integration.commands.dlt
+  partitions: 3
+  replicas: 3
+  config:
+    min.insync.replicas: 2          # with acks=all: a write survives the loss of one broker
+    retention.ms: 2419200000
+    cleanup.policy: delete
+---
+# owner: integration-service (consumer owns the contract); consumers: resolution-service produces
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: integration.queries
+  labels:
+    strimzi.io/cluster: demp-kafka
+spec:
+  topicName: integration.queries
+  partitions: 12
+  replicas: 3
+  config:
+    min.insync.replicas: 2          # with acks=all: a write survives the loss of one broker
+    retention.ms: 604800000
+    cleanup.policy: delete
+---
+# dead letters of integration.queries (kept longer: they are analysed by people)
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: integration.queries.dlt
+  labels:
+    strimzi.io/cluster: demp-kafka
+spec:
+  topicName: integration.queries.dlt
+  partitions: 3
+  replicas: 3
+  config:
+    min.insync.replicas: 2          # with acks=all: a write survives the loss of one broker
+    retention.ms: 2419200000
+    cleanup.policy: delete
+---
+# owner: integration-service; consumers: resolution-service, analytics-service
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: integration.events
+  labels:
+    strimzi.io/cluster: demp-kafka
+spec:
+  topicName: integration.events
+  partitions: 12
+  replicas: 3
+  config:
+    min.insync.replicas: 2          # with acks=all: a write survives the loss of one broker
+    retention.ms: 604800000
+    cleanup.policy: delete
+---
+# dead letters of integration.events (kept longer: they are analysed by people)
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: integration.events.dlt
+  labels:
+    strimzi.io/cluster: demp-kafka
+spec:
+  topicName: integration.events.dlt
+  partitions: 3
+  replicas: 3
+  config:
+    min.insync.replicas: 2          # with acks=all: a write survives the loss of one broker
+    retention.ms: 2419200000
+    cleanup.policy: delete
+---
+# Debezium heartbeat. Without it the connector blocks when topic auto-creation is off
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: debezium-heartbeat.resolution-cdc
+  labels:
+    strimzi.io/cluster: demp-kafka
+spec:
+  topicName: __debezium-heartbeat.resolution-cdc
+  partitions: 1
+  replicas: 3
+  config:
+    min.insync.replicas: 2          # with acks=all: a write survives the loss of one broker
+    retention.ms: 86400000
+    cleanup.policy: delete

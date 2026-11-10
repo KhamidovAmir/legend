@@ -1,0 +1,47 @@
+{
+  "mappings": [
+    {
+      "name": "retry delivery: accepted for async processing",
+      "priority": 10,
+      "request": { "method": "POST", "urlPathPattern": "/deliveries/([^/]+)/retry" },
+      "response": {
+        "status": 202,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": { "requestId": "DELIVERY-REQ-{{randomValue length=8 type='ALPHANUMERIC'}}" },
+        "transformers": ["response-template"]
+      }
+    },
+    {
+      "name": "retry delivery: no answer in time -> UNKNOWN (shipment id starts with TIMEOUT-)",
+      "priority": 1,
+      "request": { "method": "POST", "urlPathPattern": "/deliveries/TIMEOUT-[^/]+/retry" },
+      "response": { "status": 202, "fixedDelayMilliseconds": 10000, "jsonBody": { "requestId": "LOST" } }
+    },
+    {
+      "name": "retry delivery: rejected (shipment id starts with REJECT-)",
+      "priority": 1,
+      "request": { "method": "POST", "urlPathPattern": "/deliveries/REJECT-[^/]+/retry" },
+      "response": { "status": 422, "jsonBody": { "error": "SHIPMENT_NOT_RETRYABLE" } }
+    },
+    {
+      "name": "shipment state: delivery scheduled",
+      "priority": 10,
+      "request": { "method": "GET", "urlPathPattern": "/shipments/([^/]+)" },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": { "deliveryStatus": "DELIVERY_SCHEDULED" }
+      }
+    },
+    {
+      "name": "shipment state: stale read model, old state is still visible (id starts with STALE- or TIMEOUT-STALE-)",
+      "priority": 1,
+      "request": { "method": "GET", "urlPathPattern": "/shipments/(TIMEOUT-)?STALE-[^/]+" },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": { "deliveryStatus": "DELIVERY_FAILED" }
+      }
+    }
+  ]
+}

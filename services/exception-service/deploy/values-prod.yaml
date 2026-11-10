@@ -1,0 +1,18 @@
+# exception-service @ prod
+replicaCount: 3
+env:
+  DB_URL: jdbc:postgresql://pg-prod.example.com:5432/exception_db
+  KAFKA_BOOTSTRAP_SERVERS: kafka-prod-bootstrap.kafka:9092
+  TRACING_SAMPLING_PROBABILITY: "0.05"
+  EXCEPTIONS_CLOSING_QUIET_PERIOD: 15m
+vault:
+  path: demp/prod/exception-service
+resources:
+  requests: { cpu: 200m, memory: 1Gi }
+  limits: { memory: 1Gi }
+podDisruptionBudget:
+  enabled: true
+ingress:
+  enabled: true
+  host: demp-prod.example.com
+  tlsSecret: demp-prod-tls

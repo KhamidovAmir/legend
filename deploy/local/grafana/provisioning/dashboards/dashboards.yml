@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: demp
+    folder: DEMP
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards

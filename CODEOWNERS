@@ -1,0 +1,23 @@
+# Who must approve a change. One file works for GitHub and GitLab (GitLab also supports [Sections]).
+# Rule from the team process: 1 approval for ordinary code; migrations, event contracts and the connector
+# configuration additionally need a senior / the team lead.
+
+*                                             @demp/backend
+
+# --- contracts between teams and services: a change here is a change for every consumer
+/libs/contracts/                              @demp/seniors
+/contracts/                                   @demp/seniors @demp/analysts
+/libs/platform-common/                        @demp/seniors
+
+# --- database migrations (cannot be rolled back by "helm rollback")
+/services/*/src/main/resources/db/            @demp/seniors
+
+# --- CDC: outbox table + connector config are one contract
+/services/resolution-service/deploy/debezium/ @demp/seniors @platform/kafka
+/deploy/platform/                             @demp/seniors @platform/kafka
+
+# --- delivery: pipelines, chart, alerts
+/.gitlab-ci.yml                               @demp/seniors @platform/devops
+/.github/                                     @demp/seniors @platform/devops
+/deploy/helm/                                 @platform/devops
+/deploy/observability/                        @demp/seniors

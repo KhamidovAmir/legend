@@ -1,0 +1,12 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "schedule": ["before 9am on monday"],
+  "prConcurrentLimit": 5,
+  "packageRules": [
+    { "matchUpdateTypes": ["minor", "patch"], "matchManagers": ["maven"], "groupName": "maven minor/patch" },
+    { "matchManagers": ["dockerfile", "docker-compose", "github-actions", "gitlabci"], "groupName": "infrastructure images" },
+    { "matchPackageNames": ["org.springframework.boot:spring-boot-starter-parent"], "matchUpdateTypes": ["major"], "enabled": false }
+  ],
+  "vulnerabilityAlerts": { "labels": ["security"], "schedule": ["at any time"] }
+}

@@ -1,0 +1,140 @@
+name: CI
+
+# MR/PR pipeline + main pipeline. Mirrors .gitlab-ci.yml stage by stage (see docs/ci-cd.md for the mapping).
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  MAVEN_ARGS: -B -ntp
+  REGISTRY: ghcr.io/${{ github.repository_owner }}/demp
+
+jobs:
+  # ------------------------------------------------------------------ validate: cheap checks first
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generated manifests are in sync with their sources
+        run: |
+          pip install --quiet pyyaml
+          python3 scripts/render-rules.py --check
+          python3 scripts/render-connector.py
+      - name: Prometheus rules
+        run: docker run --rm --entrypoint promtool -v "$PWD/deploy/observability:/rules" prom/prometheus:v2.55.1 check rules /rules/alerts.yml
+      - uses: azure/setup-helm@v4
+      - name: Helm lint (every service x every environment)
+        run: scripts/helm-check.sh lint
+      - name: Compose file
+        run: docker compose -f deploy/local/docker-compose.yml config -q
+
+  # ------------------------------------------------------------------ build + unit + integration tests + coverage gate
+  test:
+    runs-on: ubuntu-latest
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0            # Sonar needs history for "new code"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+      # unit (*Test) -> integration (*IT, Testcontainers: PostgreSQL + Kafka, WireMock) -> JaCoCo report + check
+      - name: Build and test
+        run: mvn $MAVEN_ARGS verify
+      - name: Coverage summary
+        if: always()
+        run: python3 scripts/coverage-summary.py >> "$GITHUB_STEP_SUMMARY"
+      - name: SonarQube quality gate
+        if: env.SONAR_TOKEN != ''
+        run: mvn $MAVEN_ARGS org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.qualitygate.wait=true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-reports
+          path: |
+            **/target/surefire-reports/*.xml
+            **/target/failsafe-reports/*.xml
+            **/target/site/jacoco/**
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jars
+          path: services/*/target/*-service.jar
+          retention-days: 1
+
+  # ------------------------------------------------------------------ image per service + vulnerability scan
+  image:
+    needs: [validate, test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [exception-service, resolution-service, integration-service, analytics-service]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: jars
+          path: services
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          build-args: |
+            SERVICE=${{ matrix.service }}
+            VERSION=${{ github.sha }}
+            REVISION=${{ github.sha }}
+          tags: ${{ env.REGISTRY }}/${{ matrix.service }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,scope=${{ matrix.service }},mode=max
+      - name: Trivy scan (fails on fixable HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ matrix.service }}:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Push (main only)
+        if: github.event_name == 'push'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker push "${{ env.REGISTRY }}/${{ matrix.service }}:${{ github.sha }}"
+
+  # ------------------------------------------------------------------ dev: automatically after every merge to main
+  deploy-dev:
+    if: github.event_name == 'push' && vars.DEPLOY_ENABLED == 'true'
+    needs: image
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: dev
+      version: ${{ github.sha }}
+    secrets: inherit
+
+  # ------------------------------------------------------------------ test: a button (QA must not get a new build mid-check)
+  # GitHub has no "manual job" inside a pipeline; the equivalent is the "test" environment with required reviewers.
+  deploy-test:
+    if: github.event_name == 'push' && vars.DEPLOY_ENABLED == 'true'
+    needs: deploy-dev
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: test
+      version: ${{ github.sha }}
+    secrets: inherit

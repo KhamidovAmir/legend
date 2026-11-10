@@ -1,0 +1,19 @@
+# Alerts go to a Mattermost channel through an incoming webhook (Slack-compatible payload).
+route:
+  receiver: mattermost
+  group_by: [alertname, application]
+  group_wait: 30s
+  repeat_interval: 4h
+  routes:
+    - matchers: [severity="critical"]
+      receiver: mattermost
+      repeat_interval: 30m
+
+receivers:
+  - name: mattermost
+    slack_configs:
+      - api_url: http://mattermost.local/hooks/REPLACE_ME   # stand value comes from Vault
+        channel: demp-alerts
+        send_resolved: true
+        title: '{{ .CommonLabels.alertname }} ({{ .CommonLabels.severity }})'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ "\n" }}{{ .Annotations.runbook }}{{ "\n" }}{{ end }}'

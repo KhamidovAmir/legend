@@ -79,6 +79,14 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        integration_external_request_duration: true
+  observations:
+    enable:
+      # background jobs (outbox relay, workers) tick every few hundred ms: a trace per tick is pure noise
+      tasks.scheduled.execution: false
   tracing:
     sampling:
       probability: ${TRACING_SAMPLING_PROBABILITY:1.0}

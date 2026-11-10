@@ -1,0 +1,41 @@
+# Debezium outbox connector of resolution-service for Kafka Connect managed by Strimzi (one per environment).
+# GENERATED from services/resolution-service/deploy/debezium/resolution-outbox-connector.json - edit the JSON,
+# then run scripts/render-connector.py. Credentials are resolved by Kafka Connect itself from a mounted secret
+# (FileConfigProvider), so they never appear in the resource or in the Connect REST API.
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaConnector
+metadata:
+  name: resolution-outbox
+  labels:
+    strimzi.io/cluster: demp-connect
+spec:
+  class: io.debezium.connector.postgresql.PostgresConnector
+  tasksMax: 1
+  config:
+    plugin.name: "pgoutput"
+    database.hostname: "${file:/opt/kafka/external-configuration/resolution-cdc/db.properties:host}"
+    database.port: "${file:/opt/kafka/external-configuration/resolution-cdc/db.properties:port}"
+    database.dbname: "resolution_db"
+    database.user: "${file:/opt/kafka/external-configuration/resolution-cdc/db.properties:user}"
+    database.password: "${file:/opt/kafka/external-configuration/resolution-cdc/db.properties:password}"
+    topic.prefix: "resolution-cdc"
+    slot.name: "resolution_outbox"
+    publication.name: "resolution_outbox_pub"
+    publication.autocreate.mode: "filtered"
+    table.include.list: "public.outbox"
+    snapshot.mode: "no_data"
+    tombstones.on.delete: "false"
+    heartbeat.interval.ms: "10000"
+    transforms: "outbox"
+    transforms.outbox.type: "io.debezium.transforms.outbox.EventRouter"
+    transforms.outbox.table.field.event.id: "id"
+    transforms.outbox.table.field.event.key: "aggregate_id"
+    transforms.outbox.table.field.event.payload: "payload"
+    transforms.outbox.table.expand.json.payload: "true"
+    transforms.outbox.route.by.field: "destination"
+    transforms.outbox.route.topic.replacement: "${routedByValue}"
+    transforms.outbox.table.fields.additional.placement: "event_type:header:eventType,event_version:header:eventVersion,aggregate_type:header:aggregateType,aggregate_id:header:aggregateId,aggregate_version:header:aggregateVersion,correlation_id:header:correlationId,causation_id:header:causationId,trace_parent:header:traceparent,created_at:header:occurredAt"
+    key.converter: "org.apache.kafka.connect.storage.StringConverter"
+    value.converter: "org.apache.kafka.connect.json.JsonConverter"
+    value.converter.schemas.enable: "false"
+    header.converter: "org.apache.kafka.connect.storage.SimpleHeaderConverter"

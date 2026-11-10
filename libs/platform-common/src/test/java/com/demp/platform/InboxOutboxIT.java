@@ -35,6 +35,7 @@ import org.testcontainers.kafka.KafkaContainer;
         "platform.outbox.polling.interval=100ms",
         "spring.sql.init.mode=always",
         "spring.kafka.consumer.auto-offset-reset=earliest",
+        "spring.kafka.template.observation-enabled=true",
         "spring.kafka.consumer.group-id=platform-test"})
 class InboxOutboxIT {
 
@@ -100,6 +101,23 @@ class InboxOutboxIT {
         assertThat(envelope.payload().get("value").asInt()).isEqualTo(42);
         await().untilAsserted(() -> assertThat(jdbc.queryForObject(
                 "select published_at is not null from outbox where id = ?", Boolean.class, id)).isTrue());
+    }
+
+    @Test
+    void traceContextStoredInOutboxSurvivesThePublication() {
+        UUID id = UUID.randomUUID();
+        String traceParent = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01";
+        jdbc.update("""
+                insert into outbox (id, aggregate_type, aggregate_id, aggregate_version, destination, event_type,
+                                    event_version, payload, trace_parent, created_at)
+                values (?, 'Thing', 'traced', 1, 'test.events', 'Traced', 1, '{}'::jsonb, ?, now())
+                """, id, traceParent);
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() ->
+                assertThat(sink.records).anyMatch(r -> reader.read(r).id().equals(id)));
+        ConsumerRecord<String, String> record = sink.records.stream().filter(r -> reader.read(r).id().equals(id)).findFirst().orElseThrow();
+        assertThat(record.headers().headers("traceparent")).hasSize(1);
+        assertThat(new String(record.headers().lastHeader("traceparent").value())).isEqualTo(traceParent);
     }
 
     @Test

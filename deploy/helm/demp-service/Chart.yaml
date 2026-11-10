@@ -1,0 +1,6 @@
+apiVersion: v2
+name: demp-service
+description: Common chart for all DEMP Spring Boot services. A service supplies only its values files.
+type: application
+version: 1.0.0        # version of the chart itself
+appVersion: "0.0.0"   # overridden by the pipeline: --set image.tag=<version>

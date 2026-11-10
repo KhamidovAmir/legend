@@ -1,0 +1,190 @@
+# Local environment: the whole periphery on a laptop. Services themselves are normally started from the IDE
+# (profile-less, defaults point to localhost); "--profile apps" runs them in containers as well.
+#
+#   make up            infrastructure only
+#   make up-apps       infrastructure + 4 services (needs "mvn package" first)
+#   make connector     register the Debezium connector (after resolution-service created its schema)
+name: demp
+
+x-app: &app
+  profiles: ["apps"]
+  build: &app-build
+    context: ../..
+  environment: &app-env
+    KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+    OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
+    LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
+  depends_on:
+    postgres: { condition: service_healthy }
+    kafka-init: { condition: service_completed_successfully }
+  healthcheck:
+    test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health/readiness | grep -q UP"]
+    interval: 5s
+    retries: 40
+    start_period: 20s
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    # wal_level=logical is required by Debezium; max_slot_wal_keep_size caps WAL kept for a stopped connector
+    command: ["postgres", "-c", "wal_level=logical", "-c", "max_slot_wal_keep_size=2GB"]
+    environment:
+      POSTGRES_PASSWORD: postgres
+    ports: ["5432:5432"]
+    volumes:
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d analytics_db"]
+      interval: 3s
+      retries: 30
+
+  kafka:
+    image: apache/kafka:3.9.1
+    ports: ["9092:9092"]
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://:19092,CONTROLLER://:9093,HOST://:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:19092,HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,HOST:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      # as on real stands: topics are created explicitly, a typo in a topic name must fail loudly
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 5s
+      retries: 30
+
+  kafka-init:
+    image: apache/kafka:3.9.1
+    depends_on:
+      kafka: { condition: service_healthy }
+    volumes:
+      - ../../scripts/create-topics.sh:/create-topics.sh:ro
+    entrypoint: ["/bin/bash", "/create-topics.sh", "kafka:19092"]
+
+  # Kafka Connect with Debezium. On real stands this is a shared platform; here it is one container.
+  connect:
+    image: debezium/connect:2.7.3.Final
+    depends_on:
+      kafka: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+    ports: ["8088:8083"]
+    environment:
+      BOOTSTRAP_SERVERS: kafka:19092
+      GROUP_ID: demp-connect
+      CONFIG_STORAGE_TOPIC: connect.configs
+      OFFSET_STORAGE_TOPIC: connect.offsets
+      STATUS_STORAGE_TOPIC: connect.status
+      CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      STATUS_STORAGE_REPLICATION_FACTOR: 1
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8083/connectors > /dev/null"]
+      interval: 5s
+      retries: 40
+
+  # Stub of the external Delivery system (see wiremock/mappings: TIMEOUT-*, REJECT-*, STALE-* shipment ids)
+  delivery-stub:
+    image: wiremock/wiremock:3.9.1
+    command: ["--global-response-templating", "--verbose"]
+    ports: ["8089:8080"]
+    volumes:
+      - ./wiremock/mappings:/home/wiremock/mappings:ro
+
+  # ---------------------------------------------------------------- observability
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    ports: ["9090:9090"]
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../observability/alerts.yml:/etc/prometheus/alerts.yml:ro
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    ports: ["9093:9093"]
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    ports: ["3000:3000"]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../observability/dashboards:/var/lib/grafana/dashboards:ro
+
+  # Traces (OTLP over HTTP on 4318). UI: http://localhost:16686
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    ports: ["16686:16686", "4318:4318"]
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.16.0
+    environment:
+      DATA_SOURCE_NAME: postgresql://postgres:postgres@postgres:5432/resolution_db?sslmode=disable
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.8.0
+    command: ["--kafka.server=kafka:19092"]
+    depends_on:
+      kafka: { condition: service_healthy }
+    restart: on-failure
+
+  kafka-ui:
+    image: ghcr.io/kafbat/kafka-ui:v1.1.0
+    ports: ["8090:8080"]
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:19092
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_NAME: connect
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: http://connect:8083
+    depends_on:
+      kafka: { condition: service_healthy }
+
+  # ---------------------------------------------------------------- services (profile "apps")
+  exception-service:
+    <<: *app
+    build: { <<: *app-build, args: { SERVICE: exception-service } }
+    ports: ["8081:8080"]
+    environment:
+      <<: *app-env
+      DB_URL: jdbc:postgresql://postgres:5432/exception_db
+
+  resolution-service:
+    <<: *app
+    build: { <<: *app-build, args: { SERVICE: resolution-service } }
+    ports: ["8082:8080"]
+    environment:
+      <<: *app-env
+      DB_URL: jdbc:postgresql://postgres:5432/resolution_db
+
+  integration-service:
+    <<: *app
+    build: { <<: *app-build, args: { SERVICE: integration-service } }
+    ports: ["8083:8080"]
+    environment:
+      <<: *app-env
+      DB_URL: jdbc:postgresql://postgres:5432/integration_db
+      DELIVERY_BASE_URL: http://delivery-stub:8080
+
+  analytics-service:
+    <<: *app
+    build: { <<: *app-build, args: { SERVICE: analytics-service } }
+    ports: ["8084:8080"]
+    environment:
+      <<: *app-env
+      DB_URL: jdbc:postgresql://postgres:5432/analytics_db

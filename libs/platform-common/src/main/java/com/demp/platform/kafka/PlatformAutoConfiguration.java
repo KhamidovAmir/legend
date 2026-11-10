@@ -96,7 +96,10 @@ public class PlatformAutoConfiguration {
         @Bean
         PollingOutboxRelay pollingOutboxRelay(JdbcTemplate jdbc, KafkaTemplate<String, String> kafka,
                                               TransactionTemplate tx, OutboxProperties props, MeterRegistry meters) {
-            return new PollingOutboxRelay(jdbc, kafka, tx, props.getPolling(), meters);
+            // A dedicated, NON-observed template: an observed one would overwrite the "traceparent" header with the
+            // context of this scheduler thread, and the trace of the original business operation would be cut here.
+            KafkaTemplate<String, String> relayTemplate = new KafkaTemplate<>(kafka.getProducerFactory());
+            return new PollingOutboxRelay(jdbc, relayTemplate, tx, props.getPolling(), meters);
         }
     }
 }

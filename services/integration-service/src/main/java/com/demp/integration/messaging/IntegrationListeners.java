@@ -30,7 +30,7 @@ public class IntegrationListeners {
     private final OperationExecutor executor;
     private final ObjectMapper mapper;
 
-    @KafkaListener(topics = Topics.INTEGRATION_COMMANDS, id = "integration-commands",
+    @KafkaListener(topics = Topics.INTEGRATION_COMMANDS, id = "integration-commands", groupId = "integration-service.commands",
             concurrency = "${integration.commands-concurrency}")
     public void onCommand(ConsumerRecord<String, String> record) {
         EventEnvelope envelope = reader.read(record);
@@ -42,7 +42,7 @@ public class IntegrationListeners {
         }
     }
 
-    @KafkaListener(topics = Topics.INTEGRATION_QUERIES, id = "integration-queries",
+    @KafkaListener(topics = Topics.INTEGRATION_QUERIES, id = "integration-queries", groupId = "integration-service.queries",
             concurrency = "${integration.queries-concurrency}")
     public void onQuery(ConsumerRecord<String, String> record) {
         EventEnvelope envelope = reader.read(record);
@@ -52,7 +52,7 @@ public class IntegrationListeners {
     }
 
     /** Async results published by the Delivery team in THEIR format (no envelope headers). */
-    @KafkaListener(topics = Topics.EXTERNAL_DELIVERY_RESULTS, id = "delivery-results")
+    @KafkaListener(topics = Topics.EXTERNAL_DELIVERY_RESULTS, id = "delivery-results", groupId = "integration-service.delivery-results")
     public void onDeliveryResult(ConsumerRecord<String, String> record) {
         ExternalCommandResult result;
         try {

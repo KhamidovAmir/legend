@@ -21,7 +21,7 @@ public class ExternalEventListener {
     private final RegistrationService registration;
     private final ObjectMapper mapper;
 
-    @KafkaListener(topics = Topics.EXTERNAL_DELIVERY_EVENTS, id = "external-events")
+    @KafkaListener(topics = Topics.EXTERNAL_DELIVERY_EVENTS, id = "external-events", groupId = "exception-service.external-events")
     public void onExternalEvent(ConsumerRecord<String, String> record) {
         ExternalEvent event = parse(record);
         try (MessageContext.Scope ignored = MessageContext.open(

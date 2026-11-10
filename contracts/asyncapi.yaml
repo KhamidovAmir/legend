@@ -1,0 +1,78 @@
+asyncapi: 3.0.0
+info:
+  title: DEMP internal messaging
+  version: 1.0.0
+  description: |
+    Human-readable catalogue of Kafka channels. The executable source of truth for payloads is the Java module
+    libs/contracts (records); this file is what analysts and neighbouring teams read and review.
+
+    Envelope: metadata travels in Kafka HEADERS (id, eventType, eventVersion, aggregateType, aggregateId,
+    aggregateVersion, correlationId, causationId, occurredAt, traceparent), the record VALUE is the JSON payload,
+    the record KEY is the exception id. External topics (external.*) are owned by other teams and carry
+    everything in the body.
+
+    Compatibility rules: fields are only added; consumers ignore unknown fields and unknown event types;
+    a breaking change = new eventVersion published in parallel with the old one.
+channels:
+  external.delivery.events:
+    address: external.delivery.events
+    description: Owner - Delivery team. Problems detected by the Delivery system.
+    messages:
+      DeliveryFailed: { $ref: '#/components/messages/ExternalEvent' }
+  external.delivery.results:
+    address: external.delivery.results
+    description: Owner - Delivery team. Asynchronous results of commands we sent.
+    messages:
+      DeliveryRetryCompleted: { $ref: '#/components/messages/ExternalCommandResult' }
+  exception.events:
+    address: exception.events
+    description: Owner - exception-service (producer). ExceptionCreated, ExceptionClassified, ExceptionStatusChanged, ExceptionClosed, ExceptionCommandRejected.
+  exception.commands:
+    address: exception.commands
+    description: Owner - exception-service (consumer). StartExceptionProgress, MarkExceptionWaiting, ResumeException, ResolveException, CloseException.
+  resolution.events:
+    address: resolution.events
+    description: Owner - resolution-service. WorkflowStarted, ActionAttemptStarted, ReconciliationFinished, VerificationCompleted, ResolutionRecorded, SlaBreached, WorkItemCreated.
+  integration.commands:
+    address: integration.commands
+    description: Owner - integration-service (consumer). ExecuteAction. Side effects; never mixed with queries.
+  integration.queries:
+    address: integration.queries
+    description: Owner - integration-service (consumer). QueryExternalState. Read-only; separate consumer pool and rate limit.
+  integration.events:
+    address: integration.events
+    description: Owner - integration-service. IntegrationAccepted, IntegrationCompleted, IntegrationFailed, IntegrationUnknown, ExternalStateReceived, ExternalStateQueryFailed.
+operations:
+  registerExternalEvent:
+    action: receive
+    channel: { $ref: '#/channels/external.delivery.events' }
+    summary: exception-service registers an Exception
+  receiveCommandResult:
+    action: receive
+    channel: { $ref: '#/channels/external.delivery.results' }
+    summary: integration-service matches the result with its IntegrationOperation
+components:
+  messages:
+    ExternalEvent:
+      payload:
+        type: object
+        required: [eventId, eventType, sourceSystem, entityType, entityId]
+        properties:
+          eventId: { type: string, description: unique within sourceSystem; used for technical deduplication }
+          eventType: { type: string, examples: [DeliveryFailed, ShipmentDataInvalid] }
+          sourceSystem: { type: string, examples: [DELIVERY, WMS] }
+          entityType: { type: string, examples: [SHIPMENT] }
+          entityId: { type: string }
+          region: { type: string }
+          occurredAt: { type: string, format: date-time }
+          correlationId: { type: string }
+          payload: { type: object }
+    ExternalCommandResult:
+      payload:
+        type: object
+        required: [status]
+        properties:
+          externalRequestId: { type: string }
+          idempotencyKey: { type: string, description: the Idempotency-Key we sent; lets us match a result whose HTTP response was lost }
+          status: { type: string, enum: [COMPLETED, REJECTED] }
+          result: { type: string }

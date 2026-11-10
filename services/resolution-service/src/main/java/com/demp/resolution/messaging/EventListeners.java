@@ -26,7 +26,7 @@ public class EventListeners {
     private final ResolutionWorkflowService workflow;
     private final ObjectMapper mapper;
 
-    @KafkaListener(topics = Topics.EXCEPTION_EVENTS, id = "resolution-exception-events")
+    @KafkaListener(topics = Topics.EXCEPTION_EVENTS, id = "resolution-exception-events", groupId = "resolution-service.exception-events")
     public void onExceptionEvent(ConsumerRecord<String, String> record) {
         EventEnvelope envelope = reader.read(record);
         switch (envelope.type()) {
@@ -38,7 +38,7 @@ public class EventListeners {
         }
     }
 
-    @KafkaListener(topics = Topics.INTEGRATION_EVENTS, id = "resolution-integration-events")
+    @KafkaListener(topics = Topics.INTEGRATION_EVENTS, id = "resolution-integration-events", groupId = "resolution-service.integration-events")
     public void onIntegrationEvent(ConsumerRecord<String, String> record) {
         EventEnvelope envelope = reader.read(record);
         idempotent.handle("resolution-integration-events", envelope, e -> {
