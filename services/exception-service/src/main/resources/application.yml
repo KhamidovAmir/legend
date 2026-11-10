@@ -1,0 +1,77 @@
+spring:
+  application:
+    name: exception-service
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/exception_db}
+    username: ${DB_USERNAME:exception}
+    password: ${DB_PASSWORD:exception}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate          # schema is owned by Liquibase; Hibernate only verifies the mapping
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: exception-service
+      auto-offset-reset: earliest
+      properties:
+        max.poll.interval.ms: 300000
+    producer:
+      acks: all
+      properties:
+        enable.idempotence: true
+        delivery.timeout.ms: 30000
+    listener:
+      ack-mode: record
+      observation-enabled: true
+      concurrency: ${KAFKA_LISTENER_CONCURRENCY:3}
+    template:
+      observation-enabled: true
+  mvc:
+    problemdetails:
+      enabled: true
+  lifecycle:
+    timeout-per-shutdown-phase: 25s
+
+server:
+  port: ${SERVER_PORT:8081}
+  shutdown: graceful
+
+platform:
+  outbox:
+    polling:
+      enabled: true
+
+exceptions:
+  closing:
+    # RESOLVED -> CLOSED after this quiet period (a late contradicting signal may still re-open the work)
+    quiet-period: ${EXCEPTIONS_CLOSING_QUIET_PERIOD:30s}
+    interval: 5s
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
+  otlp:
+    tracing:
+      endpoint: ${OTLP_TRACING_ENDPOINT:http://localhost:4318/v1/traces}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html

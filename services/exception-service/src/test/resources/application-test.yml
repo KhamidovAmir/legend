@@ -1,0 +1,12 @@
+spring:
+  kafka:
+    listener:
+      concurrency: 1
+platform:
+  outbox:
+    polling:
+      interval: 100ms
+exceptions:
+  closing:
+    quiet-period: 0s
+    interval: 300ms
