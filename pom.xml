@@ -21,8 +21,8 @@
     <module>libs/platform-common</module>
     <module>services/exception-service</module>
     <module>services/resolution-service</module>
-    <!--M <module>services/integration-service</module> M-->
-    <!--M <module>services/analytics-service</module> M-->
+    <module>services/integration-service</module>
+    <module>services/analytics-service</module>
   </modules>
 
   <properties>

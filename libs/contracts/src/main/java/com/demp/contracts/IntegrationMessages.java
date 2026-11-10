@@ -63,9 +63,12 @@ public final class IntegrationMessages {
     public record ExternalStateQueryFailed(UUID queryId, UUID exceptionId, String targetSystem, String reason) {
     }
 
-    /** Async result sent by Delivery team to {@link Topics#EXTERNAL_DELIVERY_RESULTS} (their format). */
+    /**
+     * Async result sent by Delivery team to {@link Topics#EXTERNAL_DELIVERY_RESULTS} (their format).
+     * idempotencyKey echoes the key we sent: the only way to match a result of a command whose HTTP response was lost.
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record ExternalCommandResult(String externalRequestId, String status, String result) {
+    public record ExternalCommandResult(String externalRequestId, String idempotencyKey, String status, String result) {
     }
 
     private IntegrationMessages() {

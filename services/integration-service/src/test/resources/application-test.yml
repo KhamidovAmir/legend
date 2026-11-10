@@ -1,0 +1,12 @@
+platform:
+  outbox:
+    polling:
+      interval: 100ms
+integration:
+  systems:
+    DELIVERY:
+      read-timeout: 500ms
+      retry-backoff: 10ms
+      commands-per-second: 1000
+      queries-per-second: 1000
+      circuit-breaker-minimum-calls: 100000   # breaker behaviour is covered by ExternalCallGuardTest

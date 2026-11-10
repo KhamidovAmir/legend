@@ -1,0 +1,62 @@
+spring:
+  application:
+    name: analytics-service
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/analytics_db}
+    username: ${DB_USERNAME:analytics}
+    password: ${DB_PASSWORD:analytics}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: analytics-service
+      auto-offset-reset: earliest
+      properties:
+        max.poll.interval.ms: 300000
+    producer:
+      acks: all
+      properties:
+        enable.idempotence: true
+        delivery.timeout.ms: 30000
+    listener:
+      ack-mode: record
+      observation-enabled: true
+      concurrency: ${KAFKA_LISTENER_CONCURRENCY:3}
+    template:
+      observation-enabled: true
+  mvc:
+    problemdetails:
+      enabled: true
+  lifecycle:
+    timeout-per-shutdown-phase: 25s
+
+server:
+  port: ${SERVER_PORT:8084}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
+  otlp:
+    tracing:
+      endpoint: ${OTLP_TRACING_ENDPOINT:http://localhost:4318/v1/traces}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
