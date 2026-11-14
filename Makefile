@@ -18,27 +18,28 @@ verify: ## unit + integration tests (Testcontainers) + JaCoCo coverage gate
 up: ## local infrastructure: postgres, kafka, connect, delivery stub, prometheus, grafana, jaeger
 	$(COMPOSE) up -d --wait
 
-up-apps: build ## infrastructure + all four services in containers
+up-apps: build ## infrastructure + all four services in containers + Debezium connector
 	$(COMPOSE) --profile apps up -d --build --wait
+	$(COMPOSE) run --rm --no-deps connect-init
 
 down: ## stop everything and drop volumes
-	$(COMPOSE) --profile apps down -v
+	$(COMPOSE) --profile apps --profile tools down -v
 
 connector: ## register the Debezium outbox connector (resolution-service must have started once)
-	scripts/register-connector.sh
+	$(COMPOSE) run --rm --no-deps connect-init
 
 run-%: ## run one service on the host, e.g. make run-exception-service
 	$(MVN) -pl services/$* -am -DskipTests -Djacoco.skip install -q
 	java -jar services/$*/target/$*.jar
 
 demo: ## send a DeliveryFailed event for a random shipment
-	scripts/demo.sh failed SHP-$$RANDOM
+	bash scripts/demo.sh failed SHP-$$RANDOM
 
 logs: ## follow service logs (apps profile)
 	$(COMPOSE) --profile apps logs -f exception-service resolution-service integration-service analytics-service
 
 helm-lint: ## lint the chart with values of every service and environment
-	scripts/helm-check.sh lint
+	bash scripts/helm-check.sh lint
 
 helm-template: ## render manifests of every service for an environment: make helm-template ENV=dev
-	scripts/helm-check.sh template $(ENV)
+	bash scripts/helm-check.sh template $(ENV)

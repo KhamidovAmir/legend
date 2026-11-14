@@ -4,6 +4,7 @@
 #   make up            infrastructure only
 #   make up-apps       infrastructure + 4 services (needs "mvn package" first)
 #   make connector     register the Debezium connector (after resolution-service created its schema)
+# Nothing here needs bash on the host: one-shot steps run in containers (works from PowerShell too).
 name: demp
 
 x-app: &app
@@ -67,7 +68,8 @@ services:
       kafka: { condition: service_healthy }
     volumes:
       - ../../scripts/create-topics.sh:/create-topics.sh:ro
-    entrypoint: ["/bin/bash", "/create-topics.sh", "kafka:19092"]
+    # "tr -d '\r'": the script still works if it was checked out with CRLF line endings on Windows
+    entrypoint: ["/bin/bash", "-c", "tr -d '\\r' < /create-topics.sh | bash -s kafka:19092"]
 
   # Kafka Connect with Debezium. On real stands this is a shared platform; here it is one container.
   connect:
@@ -89,6 +91,19 @@ services:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8083/connectors > /dev/null"]
       interval: 5s
       retries: 40
+
+  # One-shot: registers the Debezium outbox connector. Runs inside a container, so it needs neither bash nor curl
+  # on the host (Windows).  docker compose run --rm --no-deps connect-init   (= make connector)
+  connect-init:
+    image: debezium/connect:2.7.3.Final
+    profiles: ["tools"]
+    environment:
+      CONNECT_URL: http://connect:8083
+      CONNECTOR_FILE: /connector.json
+    volumes:
+      - ../../scripts/register-connector.sh:/register-connector.sh:ro
+      - ../../services/resolution-service/deploy/debezium/resolution-outbox-connector.json:/connector.json:ro
+    entrypoint: ["/bin/bash", "-c", "tr -d '\\r' < /register-connector.sh | bash -s"]
 
   # Stub of the external Delivery system (see wiremock/mappings: TIMEOUT-*, REJECT-*, STALE-* shipment ids)
   delivery-stub:

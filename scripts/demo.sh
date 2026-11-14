@@ -5,6 +5,8 @@
 #   scripts/demo.sh result  <externalRequestId|-> [idempotencyKey]   async "DeliveryRetryCompleted"
 #   scripts/demo.sh show    SHP-1           state in all services
 set -euo pipefail
+# Git Bash on Windows rewrites arguments that look like Unix paths (/opt/kafka/...) into C:\... - switch that off
+export MSYS_NO_PATHCONV=1
 KAFKA_CONTAINER=${KAFKA_CONTAINER:-demp-kafka-1}
 produce() { # topic key json
   printf '%s|%s\n' "$2" "$3" | docker exec -i "$KAFKA_CONTAINER" /opt/kafka/bin/kafka-console-producer.sh \
@@ -13,7 +15,7 @@ produce() { # topic key json
 case "${1:-}" in
   failed)
     shipment=${2:?shipment id}
-    event_id=$(cat /proc/sys/kernel/random/uuid)
+    event_id=$(docker exec "$KAFKA_CONTAINER" cat /proc/sys/kernel/random/uuid)   # no uuidgen on Windows
     produce external.delivery.events "$shipment" "{\"eventId\":\"$event_id\",\"eventType\":\"DeliveryFailed\",\"sourceSystem\":\"DELIVERY\",\"entityType\":\"SHIPMENT\",\"entityId\":\"$shipment\",\"region\":\"MSK\",\"occurredAt\":\"$(date -u +%FT%TZ)\",\"correlationId\":\"demo-$shipment\",\"payload\":{\"reason\":\"RECIPIENT_UNAVAILABLE\"}}"
     echo "DeliveryFailed sent: shipment=$shipment eventId=$event_id correlationId=demo-$shipment"
     ;;

@@ -6,7 +6,7 @@ import sys
 
 import yaml
 
-src = json.load(open("services/resolution-service/deploy/debezium/resolution-outbox-connector.json"))["config"]
+src = json.load(open("services/resolution-service/deploy/debezium/resolution-outbox-connector.json"))
 dst = yaml.safe_load(open("deploy/platform/debezium-connector.yaml"))["spec"]["config"]
 ignored = {"connector.class", "tasks.max", "database.hostname", "database.port", "database.user", "database.password"}
 diff = {k for k in set(src) | set(dst) if k not in ignored and str(src.get(k)) != str(dst.get(k))}

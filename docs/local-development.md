@@ -4,6 +4,23 @@
 Kafka Connect с Debezium, WireMock вместо Delivery, Prometheus, Alertmanager, Grafana, Jaeger, экспортёры, Kafka UI.
 Сервисы обычно запускаются из IDE: значения по умолчанию в `application.yml` смотрят на `localhost`.
 
+## Windows
+
+Стенд не требует bash на хосте: разовые шаги (создание топиков, регистрация коннектора) выполняются в контейнерах,
+поэтому `make up`, `make up-apps`, `make connector`, `make down` работают из PowerShell.
+`scripts/demo.sh` — bash-скрипт: запускайте его из Git Bash (ставится вместе с Git for Windows) или из WSL.
+
+Скрипты хранятся с окончаниями строк LF (`.gitattributes`). Если репозиторий был склонирован до появления этого
+файла, рабочие копии могут остаться с CRLF; стенд это переживает, а для запуска скриптов из Git Bash обновите их:
+
+```bash
+git rm -r -q --cached .
+```
+
+```bash
+git reset --hard
+```
+
 ## Запуск
 
 ```bash
@@ -125,4 +142,5 @@ curl -s -X POST localhost:8082/api/v1/work-items/<id>/complete -H 'Content-Type:
 | Exception застрял в `CLASSIFIED`/`IN_PROGRESS`, в `outbox` resolution есть строки, в топиках пусто | коннектор не зарегистрирован, упал или нет heartbeat-топика | `make connector`; статус коннектора; [runbook](runbooks/debezium-connector.md) |
 | `make connector` падает с ошибкой публикации | resolution-service ещё ни разу не стартовал, таблицы `outbox` нет | запустить сервис, повторить |
 | Сервис не стартует: `Schema-validation: missing column` | сущность изменена без миграции | добавить changeset; `ddl-auto: validate` это и ловит |
+| `kafka-init … exit 2`, сервисы в статусе `Created` | скрипт создания топиков получен с окончаниями строк CRLF (Windows) | обновить репозиторий: скрипт теперь очищается от `\r` перед запуском |
 | Интеграционные тесты не находят Docker | не запущен демон / нет доступа к сокету | `docker info`; unit-тесты идут без Docker: `make unit` |
